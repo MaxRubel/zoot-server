@@ -14,64 +14,81 @@ type Message struct {
 	Content string `json:"roomId"`
 }
 
-
 var upgrader = websocket.Upgrader{
 	CheckOrigin: func(r *http.Request) bool {
 		return true
 	},
 }
 
+var Clients = make(map[string]*websocket.Conn)
+
 func addWsToClient(cId string, rId string, conn *websocket.Conn) {
-    fmt.Println("Searching for client:", cId, "in room:", rId)
+	fmt.Println("Searching for client:", cId, "in room:", rId)
 
-    for i := range data.Rooms {
-        if data.Rooms[i].ID == rId {
-            fmt.Println("Found room:", rId)
+	for i := range data.Rooms {
+		if data.Rooms[i].ID == rId {
+			fmt.Println("Found room:", rId)
 
-            for x := range data.Rooms[i].Clients {
-                client := data.Rooms[i].Clients[x]
+			for x := range data.Rooms[i].Clients {
+				client := data.Rooms[i].Clients[x]
 
-                if client.ID == cId {
-                    client.WsConn = conn
-                    fmt.Println("Added websocket to client:", client.ID)
-                    return
-                }
-            }
+				if client.ID == cId {
+					client.WsConn = conn
+					fmt.Println("Added websocket to client:", client.ID)
+					return
+				}
+			}
 
-            fmt.Println("Client not found in room:", rId)
-            return
-        }
-    }
+			fmt.Println("Client not found in room:", rId)
+			return
+		}
+	}
+}
+
+func checkHowManyClients(roomId string) {
+	for i := range data.Rooms {
+		if data.Rooms[i].ID == roomId {
+			fmt.Printf("there are %v clients in this room", len(data.Rooms[i].Clients))
+		}
+	}
 }
 
 func WsHandler(w http.ResponseWriter, r *http.Request) {
 
-    conn, err := upgrader.Upgrade(w, r, nil)
+	conn, err := upgrader.Upgrade(w, r, nil)
 
-    if err != nil {
-        return
-    }
+	if err != nil {
+		return
+	}
 
 	for {
-		_, incoming, err := conn.ReadMessage()
+		_, incoming, _ := conn.ReadMessage()
 
 		split := strings.Split(string(incoming), "&")
 
-		clientId :=  split[1]
-		roomId := split[0]
+		clientId := split[2]
+		roomId := split[1]
+		messageType := split[0]
 
-		fmt.Println("roomId:", roomId)
-
-		addWsToClient(clientId, roomId, conn)
-
-		if err != nil {
-			log.Println(err)
-			break
+		if messageType == "0" {
+			BroadcastMessage("testing server!", roomId)
+			if err != nil {
+				log.Println("Error writing message:", err)
+				break
+			}
 		}
+		if messageType == "1" {
+			addWsToClient(clientId, roomId, conn)
+			checkHowManyClients(roomId)
+
+			if err != nil {
+				log.Println(err)
+				break
+			}
+		}
+
 	}
-
-    defer conn.Close()
-
+	defer conn.Close()
 }
 
 // func HandleConnections(w http.ResponseWriter, r *http.Request) {
@@ -135,7 +152,7 @@ func WsHandler(w http.ResponseWriter, r *http.Request) {
 // // }
 
 // // func iterateWebSocketConnections(roomID string) {
-	
+
 // //     for _, ws := range roomWebsockets[roomID] {
 
 // //     }
